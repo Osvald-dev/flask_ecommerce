@@ -66,6 +66,13 @@ class UsuarioDAO:
             self.session.rollback()
             raise e
         
+    def username_exist(self,username):
+        try:
+            usuario = self.session.query(User).filter_by(username=username).first()
+            return usuario
+        except SQLAlchemyError as e:
+            raise e
+
     def delete_id(self, id):
         try:
             usuario = self.get_id(id)

@@ -70,6 +70,8 @@ def update_usuario(usuario_id):
     username = request.json.get('username', usuario.username)
     email = request.json.get('email', usuario.email)
     password = request.json.get('password', usuario.password)
+    if user_dao.username_exist(username):
+        return jsonify({'message': 'El nombre del usuario ya está en uso'})
     try:
         usuario = user_dao.update(id=usuario_id, username=username, email=email, password=password)
         return jsonify({'usuario': usuario.serialize()})
