@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask import Blueprint, jsonify, request
 from flask_api.config import Config
+from flask_api.auth import jwt_required
+from flask_jwt_extended import get_jwt_identity, create_access_token
 from flask_api.db import db
 from flask_api.user.user_dao import UsuarioDAO
 
@@ -29,22 +31,20 @@ def login():
     if not usuario or not usuario.check_password(password):
         return jsonify({'message': 'Credenciales inválidas'}), 401
 
-    token = jwt.encode({'user_id': usuario.id, 'exp': datetime.utcnow() + timedelta(minutes=30)}, 
-                        Config.SECRET_KEY, algorithm='HS256')
+    if usuario.is_admin:
+        token = jwt.encode({'user_id': usuario.id, 'exp': datetime.utcnow() + timedelta(minutes=30),
+                            'is_admin': True}, Config.SECRET_KEY, algorithm='HS256')
+    else:
+        token = jwt.encode({'user_id': usuario.id, 'exp': datetime.utcnow() + timedelta(minutes=30)}, 
+                            Config.SECRET_KEY, algorithm='HS256')
 
     return jsonify({'token': token}), 200
 
 @user_bp.route('/logout', methods=['POST'])
+@jwt_required()
 def logout():
-    token = request.headers.get('Authorization')
-    if not token:
-        return jsonify({'message':'token de autorization faltante'}),401
-    try:
-        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
-        user_id = payload['user_id']
-    except jwt.InvalidTokenError:
-        return jsonify({'message': 'Token de autorizacion invalido'}), 401
-
+    user_id = get_jwt_identity()
+    
     if not user_id:
         return jsonify({'message': 'No es posible reconocer su cuenta, intenta logearte nuevamente y vuelve a intentarlo'}), 401
     
@@ -63,6 +63,7 @@ def create_usuario():
         return jsonify({'message': str(e)}), 400
     
 @user_bp.route('/modify/<int:usuario_id>', methods=['PUT'])
+@jwt_required()
 def update_usuario(usuario_id):
     usuario = user_dao.get_id(usuario_id)
     if not usuario:
@@ -79,6 +80,7 @@ def update_usuario(usuario_id):
         return jsonify({'message': str(e)}), 400
     
 @user_bp.route('/delete/<int:usuario_id>', methods=['DELETE'])
+@jwt_required()
 def delete_usuario(usuario_id):
     usuario = user_dao.get_id(usuario_id)
     if not usuario:

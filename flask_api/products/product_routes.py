@@ -1,20 +1,10 @@
-from flask import Blueprint, jsonify, request, abort
+from flask import Blueprint, jsonify, request, abort, render_template
 from functools import wraps
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from flask_api.products.product_dao import get_product_dao
 
+from flask_api.products.product_dao import get_product_dao
+from flask_api.auth import jwt_required, admin_required
 product_bp = Blueprint('product', __name__, url_prefix='/api/product')
 product_dao = get_product_dao()
-
-
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        current_user = get_jwt_identity()
-        if not current_user.get('is_admin'):
-            abort(401, description='Unauthorized')
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 @product_bp.route('/products', methods=['GET'])
@@ -25,7 +15,8 @@ def get_products():
     except:
         return jsonify({'message': 'No hay productos disponibles'}), 401
 
-@product_bp.route('/product/<int:id>', methods=['GET'])
+
+@product_bp.route('/<int:id>', methods=['GET'])
 def get_by_id(id):
     producto = product_dao.get_product_by_id(id)
     if not producto:
@@ -33,23 +24,28 @@ def get_by_id(id):
     return jsonify({'producto': producto.serialize()}), 200
 
 
-@product_bp.route('/product', methods=['POST'])
-@admin_required
+@product_bp.route('/add_product', methods=['GET', 'POST'])
+@jwt_required()
+@admin_required()
 def create_product():
-    name = request.json.get('name')
-    price = request.json.get('price')
-    description = request.json.get('description')
-    quantity = request.json.get('quantity')
+    if request.method == 'POST':
+        name = request.form.get('name')
+        price = request.form.get('price')
+        description = request.form.get('description')
+        quantity = request.form.get('quantity')
+        try:
+            producto = product_dao.create_product(name, price, description, quantity)
+            # Redirigir a otra página o mostrar mensaje de éxito
+            return render_template('add_product.html', success_message='Producto agregado correctamente')
+        except ValueError as e:
+            return render_template('add_product.html', error=str(e))
 
-    try:
-        producto = product_dao.create_product(name, price, description, quantity)
-        return jsonify({'producto': producto.serialize()}), 201
-    except ValueError as e:
-        return jsonify({'message': str(e)}), 400
+    return render_template('add_product.html')
 
 
-@product_bp.route('/product/<int:id>', methods=['PUT'])
-@admin_required
+@product_bp.route('/modify_product/<int:id>', methods=['PUT'])
+@jwt_required()
+@admin_required()
 def update_product(id):
     producto = product_dao.get_product_by_id(id)
     if not producto:
@@ -67,11 +63,12 @@ def update_product(id):
         return jsonify({'message': str(e)}), 400
 
 
-@product_bp.route('/product/<int:id>', methods=['DELETE'])
-@admin_required
+@product_bp.route('/del_product/<int:id>', methods=['DELETE'])
+@jwt_required()
+@admin_required()
 def delete_product(id):
-     producto = product_dao.get_product_by_id(id)
-     if not producto:
-          return jsonify({'message': 'Producto inexistente'}), 404
-     product_dao.delete_product(producto)
-     return jsonify({'message': 'Producto eliminado'}), 200
+    producto = product_dao.get_product_by_id(id)
+    if not producto:
+        return jsonify({'message': 'Producto inexistente'}), 404
+    product_dao.delete_product(producto)
+    return jsonify({'message': 'Producto eliminado'}), 200
